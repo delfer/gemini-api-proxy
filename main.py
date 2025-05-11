@@ -1,12 +1,13 @@
 import os
 import logging
 import codecs
-from flask import Flask, request, Response, stream_with_context
+from quart import Quart, request, Response
 import requests
+import asyncio
 from key_manager import select_best_key, update_key_stats, initialize_db, add_keys_from_env, remove_keys_from_env, get_sorted_keys, DATABASE_FILE
 from web_interface import register_web_interface
 
-app = Flask(__name__)
+app = Quart(__name__, template_folder='.')
 
 # Register web interface routes and filters
 register_web_interface(app)
@@ -33,7 +34,7 @@ USER_KEYS = [key.strip() for key in os.environ.get("USER_KEYS", "").split("|") i
 
 
 @app.route('/v1beta/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE'])
-def proxy_gemini_api(subpath):
+async def proxy_gemini_api(subpath):
     logging.info(f"Получен запрос: {request.method} {request.url}")
     logging.debug(f"Заголовки запроса: {request.headers}")
 
@@ -54,13 +55,13 @@ def proxy_gemini_api(subpath):
 
     google_api_key = None
 
-    def make_google_api_request(api_key, subpath, request, key_location):
+    async def make_google_api_request(api_key, subpath, request, key_location):
         """Helper function to make the request to Google API."""
         google_api_url = f"https://generativelanguage.googleapis.com/v1beta/{subpath}"
         logging.debug(f"URL для запроса к Google API: {google_api_url}")
 
-        # Удаляем заголовки, которые могут вызвать проблемы или не нужны для проксирования
-        headers = {key: value for key, value in request.headers if key.lower() not in ['host', 'x-api-key', 'x-goog-api-key', 'accept-encoding']}
+        # Удаляем заголовки, которые могут вызвать проблемы или не нужны для проксирования, включая Remote-Addr
+        headers = {key: value for key, value in request.headers if key.lower() not in ['host', 'x-api-key', 'x-goog-api-key', 'accept-encoding', 'remote-addr']}
         params = request.args.copy()
 
         if 'key' in params:
@@ -83,12 +84,17 @@ def proxy_gemini_api(subpath):
             is_streaming = request.headers.get('Accept') == 'text/event-stream' or request.args.get('alt') == 'sse' or 'streamGenerateContent' in subpath
             logging.info(f"Обработка {'стримингового' if is_streaming else 'обычного'} запроса")
 
-            req = requests.request(
+            # Await request.data before passing it to the synchronous requests call
+            request_data = await request.data
+
+            # Use asyncio.to_thread for the synchronous requests call
+            req = await asyncio.to_thread(
+                requests.request,
                 method=request.method,
                 url=google_api_url,
                 headers=headers,
                 params=params,
-                data=request.data,
+                data=request_data, # Pass the awaited data
                 stream=is_streaming # Set stream based on the condition
             )
             req.raise_for_status()
@@ -109,41 +115,42 @@ def proxy_gemini_api(subpath):
                 else:
                     logging.debug(f"Using req.encoding for streaming: '{req.encoding}'.")
 
-                def generate():
+                async def generate():
                     decoder = codecs.getincrementaldecoder('utf-8')(errors='replace') # Возвращаем 'replace' для большей устойчивости
-                    for i, byte_chunk in enumerate(req.iter_content(chunk_size=1024, decode_unicode=False)): # Получаем сырые байты
-                        logging.debug(f"Streaming byte_chunk {i}: type={type(byte_chunk)}, len={len(byte_chunk)}, content[:100]='{byte_chunk[:100]}'")
-                        try:
-                            # Декодируем инкрементально. final=False важно для стриминга.
-                            str_chunk = decoder.decode(byte_chunk, final=False)
-                            if str_chunk: # Отдаем только если есть результат декодирования
-                                logging.debug(f"Manually decoded str_chunk {i} (replace): type={type(str_chunk)}, len={len(str_chunk)}, content[:100]='{str_chunk[:100]}'")
-                                yield str_chunk
-                        except UnicodeDecodeError as e: # Эта ветка теперь менее вероятна с 'replace', но оставим для полноты
-                            logging.error(f"REPLACE UnicodeDecodeError in manual decode for chunk {i}: {e}. Input bytes: {byte_chunk[:200]}")
-                            # 'replace' должен был справиться, но если ошибка все же возникла, логируем и продолжаем
-                            yield f"ERROR_REPLACE_DECODING_CHUNK_{i}\n"
-                            continue
+                    # Use asyncio.to_thread for iter_content as well
+                    for i, byte_chunk in enumerate(await asyncio.to_thread(req.iter_content, chunk_size=1024, decode_unicode=False)): # Получаем сырые байты
+                         logging.debug(f"Streaming byte_chunk {i}: type={type(byte_chunk)}, len={len(byte_chunk)}, content[:100]='{byte_chunk[:100]}'")
+                         try:
+                             # Декодируем инкрементально. final=False важно для стриминга.
+                             str_chunk = decoder.decode(byte_chunk, final=False)
+                             if str_chunk: # Отдаем только если есть результат декодирования
+                                 logging.debug(f"Manually decoded str_chunk {i} (replace): type={type(str_chunk)}, len={len(str_chunk)}, content[:100]='{str_chunk[:100]}'")
+                                 yield str_chunk
+                         except UnicodeDecodeError as e: # Эта ветка теперь менее вероятна с 'replace', но оставим для полноты
+                             logging.error(f"REPLACE UnicodeDecodeError in manual decode for chunk {i}: {e}. Input bytes: {byte_chunk[:200]}")
+                             # 'replace' должен был справиться, но если ошибка все же возникла, логируем и продолжаем
+                             yield f"ERROR_REPLACE_DECODING_CHUNK_{i}\n"
+                             continue
                     # После цикла, декодируем все оставшиеся байты в буфере декодера
                     try:
-                        str_chunk_final = decoder.decode(b'', final=True)
-                        if str_chunk_final:
-                            logging.debug(f"Final manually decoded str_chunk (replace): type={type(str_chunk_final)}, len={len(str_chunk_final)}, content[:100]='{str_chunk_final[:100]}'")
-                            yield str_chunk_final
-                    except UnicodeDecodeError as e: # Аналогично, менее вероятно
-                        logging.error(f"REPLACE UnicodeDecodeError in final manual decode: {e}")
-                        yield "ERROR_REPLACE_DECODING_FINAL_CHUNK\n"
-                
+                         str_chunk_final = decoder.decode(b'', final=True)
+                         if str_chunk_final:
+                             logging.debug(f"Final manually decoded str_chunk (replace): type={type(str_chunk_final)}, len={len(str_chunk_final)}, content[:100]='{str_chunk_final[:100]}'")
+                             yield str_chunk_final
+                    except UnicodeDecodeError as e: # Аналогично, менее вероятна
+                         logging.error(f"REPLACE UnicodeDecodeError in final manual decode: {e}")
+                         yield "ERROR_REPLACE_DECODING_FINAL_CHUNK\n"
+
                 # Обновляем Content-Type в заголовках ответа, чтобы он точно был UTF-8.
-                # Flask Response будет использовать это для кодирования строк из generate() обратно в байты.
+                # Quart Response будет использовать это для кодирования строк из generate() обратно в байты.
                 # Условие is_streaming уже предполагает текстовый поток (SSE/streamGenerateContent).
                 response_headers['Content-Type'] = 'text/event-stream; charset=utf-8'
 
                 # Content-Length не применим для потоковых ответов и может вызвать проблемы
                 if 'Content-Length' in response_headers:
                     del response_headers['Content-Length']
-                    
-                return Response(stream_with_context(generate()), headers=response_headers), True # Return response and success status
+
+                return Response(generate(), headers=response_headers), True # Return response and success status
             else:
                 return Response(req.content, status=req.status_code, headers=response_headers), True # Return response and success status
 
@@ -187,7 +194,7 @@ def proxy_gemini_api(subpath):
             current_key = available_keys[current_key_index]
 
             logging.info(f"Попытка {attempts + 1}/{max_attempts} с Google API ключом из БД: {current_key}")
-            response, success = make_google_api_request(current_key, subpath, request, key_location)
+            response, success = await make_google_api_request(current_key, subpath, request, key_location) # Await the async function
             update_key_stats(current_key, success=success)
 
             if success:
@@ -201,7 +208,6 @@ def proxy_gemini_api(subpath):
                 if current_key_usage_count >= 2:
                     current_key_index += 1
                     current_key_usage_count = 0 # Reset usage count for the next key
-
             attempts += 1
 
         logging.error("Все доступные Google API ключи исчерпаны или не работают после всех попыток.")
@@ -215,15 +221,10 @@ def proxy_gemini_api(subpath):
             logging.warning("API ключ отсутствует")
             return Response("API key is missing", status=401)
 
-        response, success = make_google_api_request(google_api_key, subpath, request, key_location)
+        response, success = await make_google_api_request(google_api_key, subpath, request, key_location) # Await the async function
         update_key_stats(google_api_key, success=success)
         return response
 
     else:
         logging.warning("API ключ отсутствует")
         return Response("API key is missing", status=401)
-
-
-if __name__ == '__main__':
-    # Для запуска в продакшене следует использовать более надежный сервер, например Gunicorn
-    app.run(debug=True, host='0.0.0.0', port=5001)

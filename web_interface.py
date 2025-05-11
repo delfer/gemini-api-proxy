@@ -1,7 +1,7 @@
 import os
 import logging
 import sqlite3
-from flask import Flask, request, Response, render_template, jsonify
+from quart import Quart, request, Response, render_template, jsonify
 from datetime import datetime
 from key_manager import get_db_connection, get_sorted_keys, DATABASE_FILE, toggle_key_removed_status, add_new_key
 
@@ -27,9 +27,9 @@ def authenticate(username, password):
 # This route needs to be registered with the Flask app instance.
 # Assuming 'app' is imported or available.
 # @app.route('/admin/keys', methods=['GET'])
-def manage_keys():
+async def manage_keys():
     """Web interface to view and manage API keys."""
-    auth = request.authorization
+    auth = request.authorization # Removed await
     if not auth or not authenticate(auth.username, auth.password):
         return Response(
             'Could not verify your access level for that URL.\n'
@@ -59,7 +59,7 @@ def manage_keys():
         conn.close()
 
     # Render an HTML template (we'll create this next)
-    return render_template('keys_table.html', keys=keys_data, sort_by=sort_by, sort_order=sort_order)
+    return await render_template('keys_table.html', keys=keys_data, sort_by=sort_by, sort_order=sort_order)
 
 # This template filter needs to be registered with the Flask app instance.
 # Assuming 'app' is imported or available.
@@ -76,9 +76,9 @@ def format_timestamp_filter(timestamp):
         return '-'
 
 # Function to register routes and filters with the app
-def toggle_key(key, action):
+async def toggle_key(key, action):
     """Toggles the removed status of a key."""
-    auth = request.authorization
+    auth = request.authorization # Removed await
     if not auth or not authenticate(auth.username, auth.password):
         return Response(
             'Could not verify your access level for that URL.\n'
@@ -96,16 +96,16 @@ def toggle_key(key, action):
     else:
         return jsonify({'success': False, 'message': f'Failed to {action} key {key}'}), 400
 
-def add_key():
+async def add_key():
     """Adds a new key."""
-    auth = request.authorization
+    auth = request.authorization # Removed await
     if not auth or not authenticate(auth.username, auth.password):
         return Response(
             'Could not verify your access level for that URL.\n'
             'You have to login with proper credentials', 401,
             {'WWW-Authenticate': 'Basic realm="Login Required"'})
 
-    data = request.get_json()
+    data = await request.get_json()
     new_key = data.get('key')
 
     if not new_key:

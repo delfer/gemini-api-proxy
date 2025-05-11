@@ -13,4 +13,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Команда для запуска приложения
-CMD ["python", "main.py"]
+CMD ["hypercorn", "-b", "0.0.0.0:5001", "main:app"]

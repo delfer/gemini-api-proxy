@@ -1,37 +1,14 @@
-http:
+tcp:
   routers:
     gemini-proxy-router:
       entryPoints:
         - websecure
-      rule: "Host(`your-domain.com`)"
+      rule: "HostSNI(`your-domain.com`)"
       service: gemini-proxy-service
-      tls:
-        certResolver: myresolver
-      middlewares:
-        - no-buffering@file # Применяем middleware no-buffering
-        # - no-compress@file # Применяем middleware no-compress
+      tls: {} # Traefik будет терминировать TLS
 
   services:
     gemini-proxy-service:
       loadBalancer:
         servers:
-          - url: "http://localhost:5001"
-        # Добавляем настройки таймаутов
-
-  middlewares: # Добавляем определение middleware
-    no-buffering:
-      buffering:
-        maxRequestBodyBytes: 0
-        memRequestBodyBytes: 0
-        maxResponseBodyBytes: 0
-        memResponseBodyBytes: 0
-        retryExpression: ""
-    # Удаляем middleware no-compress, так как оно, возможно, не нужно или настроено некорректно
-    # no-compress:
-    #   compress: {}
-
-#  serversTransports: # Добавляем определение serversTransports
-#    gemini-proxy-transport:
-#      responseHeaderTimeout: "60s"
-#      # Явно указываем протокол HTTP/1.1 для связи с бэкендом
-#      disableHTTP2: true
+          - address: "localhost:5001" # Используем address для TCP сервисов

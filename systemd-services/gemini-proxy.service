@@ -6,7 +6,7 @@ After=network.target
 User=your_user_here # Замените на вашего пользователя
 Group=your_group_here # Замените на вашу группу
 WorkingDirectory=/opt/gemini-api-proxy
-ExecStart=/opt/gemini-api-proxy/.venv/bin/python main.py # Убедитесь, что путь к venv правильный
+ExecStart=/opt/gemini-api-proxy/.venv/bin/hypercorn -b 0.0.0.0:5001 main:app # Убедитесь, что путь к venv правильный и hypercorn установлен в нем
 # Environment="VAR1=value1" "VAR2=value2" # Раскомментируйте и добавьте ваши переменные окружения здесь
 # EnvironmentFile=/path/to/your/.env # Или укажите путь к файлу с переменными окружения
 Restart=on-failure
