@@ -61,7 +61,8 @@ async def proxy_gemini_api(subpath):
         logging.debug(f"URL для запроса к Google API: {google_api_url}")
 
         # Удаляем заголовки, которые могут вызвать проблемы или не нужны для проксирования, включая Remote-Addr
-        headers = {key: value for key, value in request.headers if key.lower() not in ['host', 'x-api-key', 'x-goog-api-key', 'accept-encoding', 'remote-addr']}
+        # Восстанавливаем Accept-Encoding для корректной работы сжатия
+        headers = {key: value for key, value in request.headers if key.lower() not in ['host', 'x-api-key', 'x-goog-api-key', 'remote-addr']}
         params = request.args.copy()
 
         if 'key' in params:
