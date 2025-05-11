@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  gemini-proxy:
+    build: ./gemini-proxy-service
+    ports:
+      - "5001:5001"
+    environment:
+      # Замените на ваши реальные ключи, разделенные символом '|'
+      USER_KEYS: "your_user_key_1|your_user_key_2"
+      GOOGLE_KEYS: "your_google_key_1|your_google_key_2"
+    restart: always

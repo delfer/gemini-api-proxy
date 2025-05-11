@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Key Management</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .sortable th a {
+            text-decoration: none;
+            color: inherit;
+        }
+    </style>
+</head>
+<body>
+    <h1>API Key Management</h1>
+    <p>Authenticated successfully.</p>
+
+    <table class="sortable">
+        <thead>
+            <tr>
+                <th><a href="?sort_by=key&sort_order={{ 'desc' if sort_by == 'key' and sort_order == 'asc' else 'asc' }}">Key</a></th>
+                <th><a href="?sort_by=added_at&sort_order={{ 'desc' if sort_by == 'added_at' and sort_order == 'asc' else 'asc' }}">Added At</a></th>
+                <th><a href="?sort_by=successful_requests&sort_order={{ 'desc' if sort_by == 'successful_requests' and sort_order == 'asc' else 'asc' }}">Successful Requests</a></th>
+                <th><a href="?sort_by=error_requests&sort_order={{ 'desc' if sort_by == 'error_requests' and sort_order == 'asc' else 'asc' }}">Error Requests</a></th>
+                <th><a href="?sort_by=errors_since_last_success&sort_order={{ 'desc' if sort_by == 'errors_since_last_success' and sort_order == 'asc' else 'asc' }}">Errors Since Last Success</a></th>
+                <th><a href="?sort_by=first_error_at&sort_order={{ 'desc' if sort_by == 'first_error_at' and sort_order == 'asc' else 'asc' }}">First Error At</a></th>
+                <th><a href="?sort_by=error_counter_started_at&sort_order={{ 'desc' if sort_by == 'error_counter_started_at' and sort_order == 'asc' else 'asc' }}">Error Counter Started At</a></th>
+                <th><a href="?sort_by=removed&sort_order={{ 'desc' if sort_by == 'removed' and sort_order == 'asc' else 'asc' }}">Removed</a></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for key in keys %}
+            <tr>
+                <td>{{ key['key'] }}</td>
+                <td>{{ key['added_at'] | format_timestamp }}</td>
+                <td>{{ key['successful_requests'] }}</td>
+                <td>{{ key['error_requests'] }}</td>
+                <td>{{ key['errors_since_last_success'] }}</td>
+                <td>{{ key['first_error_at'] | format_timestamp }}</td>
+                <td>{{ key['error_counter_started_at'] | format_timestamp }}</td>
+                <td>{{ key['removed'] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</body>
+</html>
