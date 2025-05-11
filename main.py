@@ -1,5 +1,6 @@
 import os
 import logging
+import codecs
 from flask import Flask, request, Response, stream_with_context
 import requests
 from key_manager import select_best_key, update_key_stats, initialize_db, add_keys_from_env, remove_keys_from_env, get_sorted_keys, DATABASE_FILE
@@ -109,10 +110,29 @@ def proxy_gemini_api(subpath):
                     logging.debug(f"Using req.encoding for streaming: '{req.encoding}'.")
 
                 def generate():
-                    # decode_unicode=True заставит requests декодировать байты в строки,
-                    # используя req.encoding (который мы установили в utf-8).
-                    for chunk_str in req.iter_content(chunk_size=8192, decode_unicode=True):
-                        yield chunk_str  # chunk_str теперь строка (Unicode)
+                    decoder = codecs.getincrementaldecoder('utf-8')(errors='replace') # Возвращаем 'replace' для большей устойчивости
+                    for i, byte_chunk in enumerate(req.iter_content(chunk_size=1024, decode_unicode=False)): # Получаем сырые байты
+                        logging.debug(f"Streaming byte_chunk {i}: type={type(byte_chunk)}, len={len(byte_chunk)}, content[:100]='{byte_chunk[:100]}'")
+                        try:
+                            # Декодируем инкрементально. final=False важно для стриминга.
+                            str_chunk = decoder.decode(byte_chunk, final=False)
+                            if str_chunk: # Отдаем только если есть результат декодирования
+                                logging.debug(f"Manually decoded str_chunk {i} (replace): type={type(str_chunk)}, len={len(str_chunk)}, content[:100]='{str_chunk[:100]}'")
+                                yield str_chunk
+                        except UnicodeDecodeError as e: # Эта ветка теперь менее вероятна с 'replace', но оставим для полноты
+                            logging.error(f"REPLACE UnicodeDecodeError in manual decode for chunk {i}: {e}. Input bytes: {byte_chunk[:200]}")
+                            # 'replace' должен был справиться, но если ошибка все же возникла, логируем и продолжаем
+                            yield f"ERROR_REPLACE_DECODING_CHUNK_{i}\n"
+                            continue
+                    # После цикла, декодируем все оставшиеся байты в буфере декодера
+                    try:
+                        str_chunk_final = decoder.decode(b'', final=True)
+                        if str_chunk_final:
+                            logging.debug(f"Final manually decoded str_chunk (replace): type={type(str_chunk_final)}, len={len(str_chunk_final)}, content[:100]='{str_chunk_final[:100]}'")
+                            yield str_chunk_final
+                    except UnicodeDecodeError as e: # Аналогично, менее вероятно
+                        logging.error(f"REPLACE UnicodeDecodeError in final manual decode: {e}")
+                        yield "ERROR_REPLACE_DECODING_FINAL_CHUNK\n"
                 
                 # Обновляем Content-Type в заголовках ответа, чтобы он точно был UTF-8.
                 # Flask Response будет использовать это для кодирования строк из generate() обратно в байты.

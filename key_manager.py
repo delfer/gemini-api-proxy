@@ -92,7 +92,13 @@ def update_key_stats(key, success=True):
         else:
             cursor.execute("SELECT first_error_at, error_counter_started_at FROM api_keys WHERE key = ?", (key,))
             row = cursor.fetchone()
-            first_error_at, error_counter_started_at = row
+            if row is None:
+                # Handle case where key is not found, though this shouldn't happen if key was just used.
+                # For robustness, we can log this or initialize these vars to None or current_time.
+                print(f"Warning: Key {key} not found in database during stat update.")
+                first_error_at, error_counter_started_at = current_time, current_time
+            else:
+                first_error_at, error_counter_started_at = row
 
             if first_error_at is None:
                 first_error_at = current_time
