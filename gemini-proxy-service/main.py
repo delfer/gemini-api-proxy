@@ -58,7 +58,8 @@ def proxy_gemini_api(subpath):
         google_api_url = f"https://generativelanguage.googleapis.com/v1beta/{subpath}"
         logging.debug(f"URL для запроса к Google API: {google_api_url}")
 
-        headers = {key: value for key, value in request.headers if key.lower() not in ['host', 'x-api-key', 'x-goog-api-key']}
+        # Удаляем заголовки, которые могут вызвать проблемы или не нужны для проксирования
+        headers = {key: value for key, value in request.headers if key.lower() not in ['host', 'x-api-key', 'x-goog-api-key', 'accept-encoding']}
         params = request.args.copy()
 
         if 'key' in params:
@@ -95,6 +96,8 @@ def proxy_gemini_api(subpath):
             response_headers = dict(req.headers)
             if 'Transfer-Encoding' in response_headers:
                 del response_headers['Transfer-Encoding']
+            if 'Content-Encoding' in response_headers:
+                del response_headers['Content-Encoding']
 
             if is_streaming:
                 def generate():
