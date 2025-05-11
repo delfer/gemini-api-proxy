@@ -55,7 +55,7 @@ The proxy service will be running on `http://localhost:5001`.
 
 ### Using Systemd (Advanced)
 
-Example systemd service files (`gemini-proxy.service` and `traefik.service`) are provided for running the service directly on a Linux system, potentially with Traefik as a reverse proxy. Refer to these files for configuration details if you choose this method.
+Example systemd service files (`systemd-services/gemini-proxy.service` and `systemd-services/traefik.service`) are provided for running the service directly on a Linux system, potentially with Traefik as a reverse proxy. Refer to these files for configuration details if you choose this method.
 
 ## Configuration
 
@@ -184,7 +184,7 @@ These documents provide examples and details on how to interact with different G
 
 ### Использование Systemd (Продвинутый вариант)
 
-Примеры файлов сервисов systemd (`gemini-proxy.service` и `traefik.service`) предоставлены для запуска сервиса непосредственно в системе Linux, возможно, с Traefik в качестве обратного прокси. Обратитесь к этим файлам для получения подробностей конфигурации, если вы выберете этот метод.
+Примеры файлов сервисов systemd (`systemd-services/gemini-proxy.service` и `systemd-services/traefik.service`) предоставлены для запуска сервиса непосредственно в системе Linux, возможно, с Traefik в качестве обратного прокси. Обратитесь к этим файлам для получения подробностей конфигурации, если вы выберете этот метод.
 
 ## Конфигурация
 
