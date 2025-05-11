@@ -36,6 +36,7 @@
                 <th><a href="?sort_by=first_error_at&sort_order={{ 'desc' if sort_by == 'first_error_at' and sort_order == 'asc' else 'asc' }}">First Error At</a></th>
                 <th><a href="?sort_by=error_counter_started_at&sort_order={{ 'desc' if sort_by == 'error_counter_started_at' and sort_order == 'asc' else 'asc' }}">Error Counter Started At</a></th>
                 <th><a href="?sort_by=removed&sort_order={{ 'desc' if sort_by == 'removed' and sort_order == 'asc' else 'asc' }}">Removed</a></th>
+                <th>Действия</th>
             </tr>
         </thead>
         <tbody>
@@ -49,10 +50,68 @@
                 <td>{{ key['first_error_at'] | format_timestamp }}</td>
                 <td>{{ key['error_counter_started_at'] | format_timestamp }}</td>
                 <td>{{ key['removed'] }}</td>
+                <td>
+                    <button onclick="toggleKey('{{ key['key'] }}', {{ 'true' if key['removed'] else 'false' }})">
+                        {{ 'Включить' if key['removed'] else 'Выключить' }}
+                    </button>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+
+    <h2>Добавить новый ключ</h2>
+    <form id="add-key-form">
+        <input type="text" id="new-key" name="new_key" placeholder="Введите новый ключ API">
+        <button type="submit">Добавить ключ</button>
+    </form>
+
+    <script>
+        function toggleKey(key, isRemoved) {
+            const action = isRemoved ? 'enable' : 'disable';
+            fetch(`/toggle_key/${key}/${action}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Reload the page or update the row
+                        window.location.reload();
+                    } else {
+                        alert('Ошибка: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Произошла ошибка при изменении статуса ключа.');
+                });
+        }
+
+        document.getElementById('add-key-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const newKeyInput = document.getElementById('new-key');
+            const newKey = newKeyInput.value;
+
+            fetch('/add_key', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ key: newKey }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    newKeyInput.value = ''; // Clear the input field
+                    window.location.reload(); // Reload the page to show the new key
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Произошла ошибка при добавлении ключа.');
+            });
+        });
+    </script>
 
 </body>
 </html>

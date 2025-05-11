@@ -1,9 +1,9 @@
 import os
 import logging
 import sqlite3
-from flask import Flask, request, Response, render_template
+from flask import Flask, request, Response, render_template, jsonify
 from datetime import datetime
-from key_manager import get_db_connection, get_sorted_keys, DATABASE_FILE
+from key_manager import get_db_connection, get_sorted_keys, DATABASE_FILE, toggle_key_removed_status, add_new_key
 
 # Assuming 'app' is initialized in main.py and imported here
 # from main import app
@@ -76,6 +76,51 @@ def format_timestamp_filter(timestamp):
         return '-'
 
 # Function to register routes and filters with the app
+def toggle_key(key, action):
+    """Toggles the removed status of a key."""
+    auth = request.authorization
+    if not auth or not authenticate(auth.username, auth.password):
+        return Response(
+            'Could not verify your access level for that URL.\n'
+            'You have to login with proper credentials', 401,
+            {'WWW-Authenticate': 'Basic realm="Login Required"'})
+
+    if action not in ['enable', 'disable']:
+        return jsonify({'success': False, 'message': 'Invalid action'}), 400
+
+    removed_status = 1 if action == 'disable' else 0
+    success = toggle_key_removed_status(key, removed_status)
+
+    if success:
+        return jsonify({'success': True, 'message': f'Key {key} {action}d successfully'})
+    else:
+        return jsonify({'success': False, 'message': f'Failed to {action} key {key}'}), 400
+
+def add_key():
+    """Adds a new key."""
+    auth = request.authorization
+    if not auth or not authenticate(auth.username, auth.password):
+        return Response(
+            'Could not verify your access level for that URL.\n'
+            'You have to login with proper credentials', 401,
+            {'WWW-Authenticate': 'Basic realm="Login Required"'})
+
+    data = request.get_json()
+    new_key = data.get('key')
+
+    if not new_key:
+        return jsonify({'success': False, 'message': 'Key is required'}), 400
+
+    success = add_new_key(new_key)
+
+    if success:
+        return jsonify({'success': True, 'message': f'Key {new_key} added successfully'})
+    else:
+        return jsonify({'success': False, 'message': f'Key {new_key} already exists or failed to add'}), 400
+
+
 def register_web_interface(app):
     app.add_url_rule('/admin/keys', 'manage_keys', manage_keys, methods=['GET'])
+    app.add_url_rule('/toggle_key/<key>/<action>', 'toggle_key', toggle_key, methods=['POST'])
+    app.add_url_rule('/add_key', 'add_key', add_key, methods=['POST'])
     app.template_filter('format_timestamp')(format_timestamp_filter)

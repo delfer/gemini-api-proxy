@@ -144,6 +144,35 @@ def get_sorted_keys():
     return keys
 
 
+def toggle_key_removed_status(key, removed_status):
+    """Toggles the removed status for a given key."""
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE api_keys SET removed = ? WHERE key = ?", (removed_status, key))
+        conn.commit()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        print(f"Error toggling removed status for key {key}: {e}")
+        return False
+    finally:
+        conn.close()
+
+def add_new_key(key):
+    """Adds a new key to the database if it doesn't exist."""
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT OR IGNORE INTO api_keys (key, added_at) VALUES (?, ?)", (key, time.time()))
+        conn.commit()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        print(f"Error adding new key {key} to database: {e}")
+        return False
+    finally:
+        conn.close()
+
+
 # Initial setup
 initialize_db()
 add_keys_from_env()
