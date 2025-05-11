@@ -100,9 +100,29 @@ def proxy_gemini_api(subpath):
                 del response_headers['Content-Encoding']
 
             if is_streaming:
+                # Для текстового стриминга (SSE, streamGenerateContent) ожидаем UTF-8.
+                # Устанавливаем req.encoding, чтобы requests.iter_content(decode_unicode=True) работал корректно.
+                if req.encoding is None or req.encoding.lower() != 'utf-8':
+                    logging.debug(f"Original req.encoding for streaming: '{req.encoding}'. Forcing to 'utf-8'.")
+                    req.encoding = 'utf-8'
+                else:
+                    logging.debug(f"Using req.encoding for streaming: '{req.encoding}'.")
+
                 def generate():
-                    for chunk in req.iter_content(chunk_size=8192):
-                        yield chunk
+                    # decode_unicode=True заставит requests декодировать байты в строки,
+                    # используя req.encoding (который мы установили в utf-8).
+                    for chunk_str in req.iter_content(chunk_size=8192, decode_unicode=True):
+                        yield chunk_str  # chunk_str теперь строка (Unicode)
+                
+                # Обновляем Content-Type в заголовках ответа, чтобы он точно был UTF-8.
+                # Flask Response будет использовать это для кодирования строк из generate() обратно в байты.
+                # Условие is_streaming уже предполагает текстовый поток (SSE/streamGenerateContent).
+                response_headers['Content-Type'] = 'text/event-stream; charset=utf-8'
+
+                # Content-Length не применим для потоковых ответов и может вызвать проблемы
+                if 'Content-Length' in response_headers:
+                    del response_headers['Content-Length']
+                    
                 return Response(stream_with_context(generate()), headers=response_headers), True # Return response and success status
             else:
                 return Response(req.content, status=req.status_code, headers=response_headers), True # Return response and success status
@@ -139,6 +159,10 @@ def proxy_gemini_api(subpath):
             if current_key_index >= len(available_keys):
                 current_key_index = 0
                 current_key_usage_count = 0 # Reset usage count when wrapping around
+
+            if not available_keys: # Check if available_keys became empty during attempts
+                 logging.error("Все доступные Google API ключи исчерпаны или не работают после всех попыток.")
+                 return Response(last_exception if last_exception else "No available Google API keys", status=500)
 
             current_key = available_keys[current_key_index]
 

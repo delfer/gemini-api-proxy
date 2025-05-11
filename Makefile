@@ -2,11 +2,11 @@
 
 package:
 	tar -czvf gemini-proxy-service.tar.gz \
-		gemini-proxy-service/Dockerfile \
-		gemini-proxy-service/key_manager.py \
-		gemini-proxy-service/main.py \
-		gemini-proxy-service/requirements.txt \
-		gemini-proxy-service/web_interface.py \
-		gemini-proxy-service/templates/keys_table.html \
-		gemini-proxy.service \
+		Dockerfile \
+		key_manager.py \
+		main.py \
+		requirements.txt \
+		web_interface.py \
+		keys_table.html \
+		systemd-services/gemini-proxy.service \
 		docker-compose.yml

@@ -5,8 +5,8 @@ After=network.target
 [Service]
 User=your_user_here # Замените на вашего пользователя
 Group=your_group_here # Замените на вашу группу
-WorkingDirectory=/Users/delfer/workspace/gemini-api-proxy/gemini-proxy-service
-ExecStart=/Users/delfer/workspace/gemini-api-proxy/gemini-proxy-service/.venv/bin/python main.py # Убедитесь, что путь к venv правильный
+WorkingDirectory=/opt/gemini-api-proxy
+ExecStart=/opt/gemini-api-proxy/.venv/bin/python main.py # Убедитесь, что путь к venv правильный
 # Environment="VAR1=value1" "VAR2=value2" # Раскомментируйте и добавьте ваши переменные окружения здесь
 # EnvironmentFile=/path/to/your/.env # Или укажите путь к файлу с переменными окружения
 Restart=on-failure
