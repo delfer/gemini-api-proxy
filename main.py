@@ -41,15 +41,22 @@ async def proxy_gemini_api(subpath):
     user_api_key = None
     key_location = None # To track where the key was found
 
-    if request.headers.get('X-Goog-Api-Key'):
+    if request.headers.get('Authorization', '').startswith('Bearer '):
+        user_api_key = request.headers.get('Authorization').split(' ')[1]
+        key_location = 'header_bearer'
+        logging.debug(f"API ключ найден в заголовке Authorization (Bearer)")
+    elif request.headers.get('X-Goog-Api-Key'):
         user_api_key = request.headers.get('X-Goog-Api-Key')
         key_location = 'header_goog'
+        logging.debug(f"API ключ найден в заголовке X-Goog-Api-Key")
     elif request.headers.get('X-API-Key'):
         user_api_key = request.headers.get('X-API-Key')
         key_location = 'header_xapi'
+        logging.debug(f"API ключ найден в заголовке X-API-Key")
     elif request.args.get('key'):
         user_api_key = request.args.get('key')
         key_location = 'query'
+        logging.debug(f"API ключ найден в параметрах запроса")
 
     logging.info(f"Получен user_api_key: {user_api_key} из {key_location}")
 
@@ -62,21 +69,23 @@ async def proxy_gemini_api(subpath):
 
         # Удаляем заголовки, которые могут вызвать проблемы или не нужны для проксирования, включая Remote-Addr
         # Восстанавливаем Accept-Encoding для корректной работы сжатия
-        headers = {key: value for key, value in request.headers if key.lower() not in ['host', 'x-api-key', 'x-goog-api-key', 'remote-addr']}
+        # Удаляем заголовки, которые могут вызвать проблемы или не нужны для проксирования, включая Remote-Addr и Authorization
+        # Восстанавливаем Accept-Encoding для корректной работы сжатия
+        headers = {key: value for key, value in request.headers if key.lower() not in ['host', 'x-api-key', 'x-goog-api-key', 'remote-addr', 'authorization']}
         params = request.args.copy()
 
         if 'key' in params:
             del params['key']
 
-        if key_location == 'header_goog':
+        if key_location == 'header_bearer' or key_location == 'query':
+            params['key'] = api_key
+            logging.debug("Ключ добавлен в параметры запроса к Google API")
+        elif key_location == 'header_goog':
             headers['X-Goog-Api-Key'] = api_key
             logging.debug("Ключ добавлен в заголовок X-Goog-Api-Key для запроса к Google API")
         elif key_location == 'header_xapi':
              headers['X-API-Key'] = api_key
              logging.debug("Ключ добавлен в заголовок X-API-Key для запроса к Google API")
-        else: # query
-            params['key'] = api_key
-            logging.debug("Ключ добавлен в параметры запроса к Google API")
 
         logging.debug(f"Заголовки запроса к Google API: {headers}")
         logging.debug(f"Параметры запроса к Google API: {params}")
@@ -202,7 +211,8 @@ async def proxy_gemini_api(subpath):
                 logging.info(f"Успешный запрос с ключом: {current_key}")
                 return response
             else:
-                last_exception = response.data.decode('utf-8') # Capture the error message
+                last_exception_bytes = await response.data # Capture the error message bytes
+                last_exception = last_exception_bytes.decode('utf-8') # Decode the bytes
                 logging.warning(f"Неудачный запрос с ключом {current_key}. Ошибка: {last_exception}")
 
                 current_key_usage_count += 1
